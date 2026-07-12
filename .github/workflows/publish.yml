@@ -14,6 +14,9 @@ jobs:
   publish:
     name: Pack & Push
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # enable GitHub OIDC token issuance for Trusted Publishing
+      contents: read
 
     steps:
       - name: Checkout
@@ -45,9 +48,15 @@ jobs:
       - name: Pack
         run: dotnet pack src/Bnet.Extensions.Configuration.Consul/Bnet.Extensions.Configuration.Consul.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.version }} -o artifacts
 
+      # Trusted Publishing: exchange the GitHub OIDC token for a short-lived NuGet API key.
+      # Requires a Trusted Publishing policy configured on nuget.org for this repo + workflow file.
+      - name: NuGet login (OIDC -> temporary API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}   # your nuget.org username (profile name), NOT your email
+
       - name: Push to NuGet
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet nuget push "artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
-          dotnet nuget push "artifacts/*.snupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "artifacts/*.snupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
