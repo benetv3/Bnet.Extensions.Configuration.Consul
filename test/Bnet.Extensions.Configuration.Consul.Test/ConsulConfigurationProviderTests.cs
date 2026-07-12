@@ -443,7 +443,7 @@ public class ConsulConfigurationProviderTests
 
             _consulClient.Received(1).List(
                 "Test",
-                Arg.Is<QueryOptions>(options => options.WaitIndex == 0),
+                Arg.Is<QueryOptions>(options => options != null && options.WaitIndex == 0),
                 Arg.Any<CancellationToken>());
         }
 
