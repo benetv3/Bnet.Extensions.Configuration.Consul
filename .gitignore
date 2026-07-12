@@ -254,3 +254,9 @@ paket-files/
 .vscode
 .build
 .DS_Store
+
+# JetBrains Rider / ReSharper
+.idea/
+*.sln.iml
+*.DotSettings
+*.DotSettings.user

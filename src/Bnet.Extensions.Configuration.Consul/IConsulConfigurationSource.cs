@@ -1,0 +1,115 @@
+// Copyright (c) Bnet. All rights reserved.
+// Derived from Winton.Extensions.Configuration.Consul, Copyright (c) Winton, licensed under the Apache License, Version 2.0.
+// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
+
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading;
+using Microsoft.Extensions.Configuration;
+using Bnet.Extensions.Configuration.Consul.Parsers;
+
+namespace Bnet.Extensions.Configuration.Consul;
+
+/// <inheritdoc />
+/// <summary>
+///     An <see cref="IConfigurationSource" /> for the ConsulConfigurationProvider.
+/// </summary>
+public interface IConsulConfigurationSource : IConfigurationSource
+{
+    /// <summary>
+    ///     Gets or sets an <see cref="Action" /> to be applied to the <see cref="ConsulClientOptions" />
+    ///     during construction of the Consul client.
+    ///     Allows the default config options for Consul to be overriden.
+    /// </summary>
+    Action<ConsulClientOptions>? ConsulConfigurationOptions { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a function taking a Consul <see cref="ConsulKvPair"/> to one or more key/value
+    ///     pairs which are injected into the Microsoft <see cref="IConfiguration"/> system.
+    /// </summary>
+    /// <remarks>
+    ///     The default ConvertConsulKVPairToConfig strategy is to remove the
+    ///     <see cref="KeyToRemove"/> portion of the Consul Key and then apply the configured
+    ///     <see cref="Parser"/> to parse the Consul value.  Note that if you customize this strategy
+    ///     there are some requirements on the final format of
+    ///     <see href="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/configuration/?view=aspnetcore-3.1#configuration-keys-and-values">Configuration Keys and Values</see>.
+    /// </remarks>
+    Func<ConsulKvPair, IEnumerable<KeyValuePair<string, string?>>> ConvertConsulKvPairToConfig { get; set; }
+
+    /// <summary>
+    ///     Gets or sets an <see cref="Action" /> to be applied to the <see cref="SocketsHttpHandler" />
+    ///     during construction of the Consul client.
+    ///     Allows the default HTTP client handler options for Consul to be overriden.
+    /// </summary>
+    Action<SocketsHttpHandler>? ConsulHttpClientHandlerOptions { get; set; }
+
+    /// <summary>
+    ///     Gets or sets an <see cref="Action" /> to be applied to the <see cref="HttpClient" /> during
+    ///     construction of the Consul client.
+    ///     Allows the default HTTP client options for Consul to be overriden.
+    /// </summary>
+    Action<HttpClient>? ConsulHttpClientOptions { get; set; }
+
+    /// <summary>
+    ///     Gets the key in Consul where the configuration is located.
+    /// </summary>
+    string Key { get; }
+
+    /// <summary>
+    ///     Gets or sets the portion of the Consul key to remove from the configuration keys.
+    ///     By default, when the configuration is parsed, the keys are created by removing the root key in Consul
+    ///     where the configuration is located.
+    ///     Defaults to <see cref="Key" />.
+    /// </summary>
+    string KeyToRemove { get; set; }
+
+    /// <summary>
+    ///     Gets or sets an <see cref="Action" /> that is invoked when an exception is raised during config load.
+    ///     Used by clients to handle the exception if possible and prevent it from being thrown.
+    /// </summary>
+    Action<ConsulLoadExceptionContext>? OnLoadException { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a <see cref="Func{ConsulWatchException, TimeSpan}" /> that is invoked when an exception is raised
+    ///     whilst watching.
+    ///     The <see cref="TimeSpan" /> returned by the function is waited before trying again.
+    /// </summary>
+    /// <remarks>
+    ///     This function is useful for implementing back-off strategies.
+    ///     It also provides access to the <see cref="CancellationToken" /> which can be used to cancel the watch task.
+    /// </remarks>
+    Func<ConsulWatchExceptionContext, TimeSpan>? OnWatchException { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a <see cref="CancellationTokenSource" /> which can be used to cancel the background task that watches Consul for changes to this config.
+    /// </summary>
+    /// <remarks>
+    ///    Cancelling the watch task by calling <c>Cancel()</c> on this <c>CancellationTokenSource</c> will completely terminate the watching process and it is not possible to restart it after this.
+    ///    By default this configuration provider will terminate the watch task itself when the <c>ConsulConfigurationProvider</c> is disposed.
+    ///    This functionality is only useful if you need to terminate the watch task early in response to some other event or want explicit control over when it is cancelled for some other reasons.
+    /// </remarks>
+    CancellationTokenSource? WatchCancellationTokenSource { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the config is optional.
+    /// </summary>
+    bool Optional { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the <see cref="IConfigurationParser" /> to use when parsing the config.
+    ///     Allows different data formats to be stored in consul under the given key.
+    ///     Defaults to <see cref="JsonConfigurationParser" />.
+    /// </summary>
+    IConfigurationParser Parser { get; set; }
+
+    /// <summary>
+    ///     Gets or sets the maximum amount of time to wait for changes to a key if <see cref="ReloadOnChange" /> is set.
+    /// </summary>
+    TimeSpan PollWaitTime { get; set; }
+
+    /// <summary>
+    ///     Gets or sets a value indicating whether the source will be reloaded if the data in consul changes.
+    /// </summary>
+    bool ReloadOnChange { get; set; }
+}

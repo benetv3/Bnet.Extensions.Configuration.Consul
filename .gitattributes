@@ -1,0 +1,10 @@
+# Normalize line endings automatically for text files
+* text=auto
+
+# Shell scripts must always use LF, otherwise the shebang breaks on Linux
+*.sh text eol=lf
+
+# Windows-specific scripts keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

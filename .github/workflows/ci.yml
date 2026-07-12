@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Bnet.Extensions.Configuration.Consul.sln
+
+      - name: Build
+        run: dotnet build Bnet.Extensions.Configuration.Consul.sln -c Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test --project test/Bnet.Extensions.Configuration.Consul.Test/Bnet.Extensions.Configuration.Consul.Test.csproj -c Release --no-build
+
+      - name: Integration tests
+        run: dotnet test --project test/Bnet.Extensions.Configuration.Consul.IntegrationTests/Bnet.Extensions.Configuration.Consul.IntegrationTests.csproj -c Release --no-build

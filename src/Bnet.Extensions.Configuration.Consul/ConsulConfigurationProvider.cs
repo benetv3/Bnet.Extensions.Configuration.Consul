@@ -1,0 +1,171 @@
+// Copyright (c) Bnet. All rights reserved.
+// Derived from Winton.Extensions.Configuration.Consul, Copyright (c) Winton, licensed under the Apache License, Version 2.0.
+// Licensed under the Apache License, Version 2.0. See LICENSE in the project root for license information.
+
+using System;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Bnet.Extensions.Configuration.Consul.Extensions;
+
+namespace Bnet.Extensions.Configuration.Consul;
+
+/// <summary>
+///     Each instance loads configuration for the key in Consul that is specified in
+///     the contained <see cref="IConsulConfigurationSource" />.
+///     It has the ability to automatically reload the config if it changes in Consul.
+/// </summary>
+/// <remarks>
+///     Each instance maintains its own <c>lastIndex</c> and uses this to detect changes.
+///     Each instance ensures calls to Consul are serialised, to avoid concurrent access to <c>lastIndex</c>.
+/// </remarks>
+internal sealed class ConsulConfigurationProvider : ConfigurationProvider, IDisposable
+{
+    private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly IConsulClient _consulClient;
+    private readonly IConsulConfigurationSource _source;
+    private ulong _lastIndex;
+    private Task? _pollTask;
+    private bool _disposed;
+
+    public ConsulConfigurationProvider(
+        IConsulConfigurationSource source,
+        IConsulClientFactory consulClientFactory)
+    {
+        if (source.Parser == null)
+        {
+            throw new ArgumentNullException(nameof(source.Parser));
+        }
+
+        _source = source;
+        _consulClient = consulClientFactory.Create();
+        _cancellationTokenSource = new CancellationTokenSource();
+        _source.WatchCancellationTokenSource?.Token.Register(() =>
+        {
+            if (!_disposed && !_cancellationTokenSource.IsCancellationRequested)
+            {
+                _cancellationTokenSource.Cancel();
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _cancellationTokenSource.Cancel();
+        _cancellationTokenSource.Dispose();
+        _consulClient.Dispose();
+        _disposed = true;
+    }
+
+    public override void Load()
+    {
+        // If polling has already begun then calling load is pointless
+        if (_pollTask != null)
+        {
+            return;
+        }
+
+        var cancellationToken = _cancellationTokenSource.Token;
+
+        DoLoad(cancellationToken).GetAwaiter().GetResult();
+
+        // Polling starts after the initial load to ensure no concurrent access to the key from this instance
+        if (_source.ReloadOnChange)
+        {
+            _pollTask = Task.Run(() => PollingLoop(cancellationToken), cancellationToken);
+        }
+    }
+
+    private async Task DoLoad(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await GetKvPairs(false, cancellationToken).ConfigureAwait(false);
+
+            if (result.HasValue())
+            {
+                Data = result.ToConfigDictionary(_source.ConvertConsulKvPairToConfig);
+            }
+            else if (!_source.Optional)
+            {
+                throw new Exception($"The configuration for key {_source.Key} was not found and is not optional.");
+            }
+
+            SetLastIndex(result);
+        }
+        catch (Exception exception)
+        {
+            var exceptionContext = new ConsulLoadExceptionContext(_source, exception);
+            _source.OnLoadException?.Invoke(exceptionContext);
+            if (!exceptionContext.Ignore)
+            {
+                throw;
+            }
+        }
+    }
+
+    private async Task<QueryResult<ConsulKvPair[]>> GetKvPairs(bool waitForChange, CancellationToken cancellationToken)
+    {
+        var queryOptions = new QueryOptions
+        {
+            WaitTime = _source.PollWaitTime,
+            WaitIndex = waitForChange ? _lastIndex : 0
+        };
+
+        var result =
+            await _consulClient
+                .List(_source.Key, queryOptions, cancellationToken)
+                .ConfigureAwait(false);
+
+        return result.StatusCode switch
+        {
+            HttpStatusCode.OK => result,
+            HttpStatusCode.NotFound => result,
+            _ => throw new Exception($"Error loading configuration from consul. Status code: {result.StatusCode}.")
+        };
+    }
+
+    private async Task PollingLoop(CancellationToken cancellationToken)
+    {
+        var consecutiveFailureCount = 0;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var result = await GetKvPairs(true, cancellationToken).ConfigureAwait(false);
+
+                if (result.LastIndex > _lastIndex)
+                {
+                    Data = result.ToConfigDictionary(_source.ConvertConsulKvPairToConfig);
+                    OnReload();
+                }
+
+                SetLastIndex(result);
+                consecutiveFailureCount = 0;
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                var wait =
+                    _source.OnWatchException?.Invoke(
+                        new ConsulWatchExceptionContext(exception, ++consecutiveFailureCount, _source)) ??
+                    TimeSpan.FromSeconds(5);
+                await Task.Delay(wait, cancellationToken);
+            }
+        }
+    }
+
+    private void SetLastIndex(QueryResult result)
+    {
+        _lastIndex = result.LastIndex == 0
+            ? 1
+            : result.LastIndex < _lastIndex
+                ? 0
+                : result.LastIndex;
+    }
+}

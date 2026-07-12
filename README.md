@@ -1,13 +1,25 @@
-# Winton.Extensions.Configuration.Consul
+# Bnet.Extensions.Configuration.Consul
 
-Adds support for configuring .NET Core applications using Consul. Works great with [git2consul](https://github.com/Cimpress-MCP/git2consul).
+> This library is a fork of [Winton.Extensions.Configuration.Consul](https://github.com/wintoncode/Winton.Extensions.Configuration.Consul), maintained by Benet Oliver. It is distributed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the original copyright notice.
 
-[![NuGet Badge](https://buildstats.info/nuget/Winton.Extensions.Configuration.Consul)](https://www.nuget.org/packages/Winton.Extensions.Configuration.Consul/)
+Adds support for configuring .NET applications using Consul. Works great with [git2consul](https://github.com/Cimpress-MCP/git2consul).
 
-[![Build history](https://buildstats.info/github/chart/wintoncode/Winton.Extensions.Configuration.Consul?branch=master)](https://github.com/wintoncode/Winton.Extensions.Configuration.Consul/actions)
+This library is trimming and Native AOT compatible: it talks to the Consul HTTP API directly using `HttpClient` and deserializes responses with `System.Text.Json` source generation, so it has no reflection-based dependencies.
+
+[![NuGet Badge](https://buildstats.info/nuget/Bnet.Extensions.Configuration.Consul)](https://www.nuget.org/packages/Bnet.Extensions.Configuration.Consul/)
+
+[![Build history](https://buildstats.info/github/chart/benetv3/Bnet.Extensions.Configuration.Consul?branch=main)](https://github.com/benetv3/Bnet.Extensions.Configuration.Consul/actions)
+
+## Differences from the upstream library
+
+This fork diverges from [Winton.Extensions.Configuration.Consul](https://github.com/wintoncode/Winton.Extensions.Configuration.Consul) in a few ways:
+
+- **No `Consul` (Consul.NET) dependency.** The provider talks to the Consul HTTP API directly using `HttpClient` and `System.Text.Json` source generation, making it trimming and Native AOT compatible.
+- **Consul client reuse.** The provider now creates a single Consul client for its lifetime instead of instantiating (and disposing) a new `HttpClient`/`SocketsHttpHandler` on every request. The upstream code created a client per call inside the watch loop, which prevented connection reuse and could leak sockets into `TIME_WAIT`, especially with a low `PollWaitTime` or frequent changes.
 
 ## Contents
 
+- [Differences from the upstream library](#differences-from-the-upstream-library)
 - [Installation](#installation)
 - [Usage](#usage)
     - [Minimal Setup](#minimal-setup)
@@ -20,7 +32,7 @@ Adds support for configuring .NET Core applications using Consul. Works great wi
 
 ## Installation
 
-Add `Winton.Extensions.Configuration.Consul` to your project's dependencies, either via the NuGet package manager or as a `PackageReference` in the csproj file.
+Add `Bnet.Extensions.Configuration.Consul` to your project's dependencies, either via the NuGet package manager or as a `PackageReference` in the csproj file.
 
 ## Usage
 
@@ -43,13 +55,13 @@ Assuming the application is running in the 'Development' environment and the app
 
 * **`ConsulConfigurationOptions`**
 
-   An `Action<ConsulClientConfiguration>` that can be used to configure the underlying Consul client.
+   An `Action<ConsulClientOptions>` that can be used to configure how the library connects to the Consul agent (address, ACL token and datacenter).
 * **`ConsulHttpClientHandlerOptions`**
 
-   An `Action<HttpClientHandler>` that can be used to configure the underlying Consul client's HTTP handler options.
+   An `Action<SocketsHttpHandler>` that can be used to configure the underlying HTTP handler options.
 * **`ConsulHttpClientOptions`**
 
-   An `Action<HttpClient>` that can be used to configure the underlying Consul client's HTTP options.
+   An `Action<HttpClient>` that can be used to configure the underlying `HttpClient` options.
 * **`KeyToRemove`**
 
    The portion of the Consul key to remove from the configuration keys.
@@ -68,7 +80,7 @@ Assuming the application is running in the 'Development' environment and the app
    A `bool` that indicates whether the config is optional. If `false` then it will throw during the first load if the config is missing for the given key. Defaults to `false`.
 * **`Parser`**
 
-   The parser to use, which should match the format of the configuration stored in Consul. Defaults to `JsonConfigurationParser`. Either use those under `Winton.Extensions.Configuration.Consul.Parsers` or create your own by implementing `IConfigurationParser`.
+   The parser to use, which should match the format of the configuration stored in Consul. Defaults to `JsonConfigurationParser`. Either use those under `Bnet.Extensions.Configuration.Consul.Parsers` or create your own by implementing `IConfigurationParser`.
 * **`PollWaitTime`**
 
    The amount of time the client should wait before timing out when polling for changes.
@@ -83,7 +95,7 @@ Assuming the application is running in the 'Development' environment and the app
 
 * **`ConvertConsulKVPairToConfig`**
 
-   A `Func<KVPair, IEnumerable<KeyValuePair<string, string>>>` which gives you complete control over the parsing of fully qualified consul keys and raw consul values; the default implementation will:
+   A `Func<ConsulKVPair, IEnumerable<KeyValuePair<string, string?>>>` which gives you complete control over the parsing of fully qualified consul keys and raw consul values; the default implementation will:
 
    - Use the configured `Parser` to parse consul values
    - Remove the configured `KeyToRemove` prefix from consul keys
@@ -196,7 +208,7 @@ builder
                 using var streamReader = new StreamReader(valueStream);
                 var parsedValue = streamReader.ReadToEnd();
 
-                return new Dictionary<string, string>()
+                return new Dictionary<string, string?>()
                 {
                     { normalizedKey, parsedValue }
                 };
