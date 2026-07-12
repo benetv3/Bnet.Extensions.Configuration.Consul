@@ -6,9 +6,9 @@ Adds support for configuring .NET applications using Consul. Works great with [g
 
 This library is trimming and Native AOT compatible: it talks to the Consul HTTP API directly using `HttpClient` and deserializes responses with `System.Text.Json` source generation, so it has no reflection-based dependencies.
 
-[![NuGet Badge](https://buildstats.info/nuget/Bnet.Extensions.Configuration.Consul)](https://www.nuget.org/packages/Bnet.Extensions.Configuration.Consul/)
-
-[![Build history](https://buildstats.info/github/chart/benetv3/Bnet.Extensions.Configuration.Consul?branch=main)](https://github.com/benetv3/Bnet.Extensions.Configuration.Consul/actions)
+[![NuGet](https://img.shields.io/nuget/v/Bnet.Extensions.Configuration.Consul.svg)](https://www.nuget.org/packages/Bnet.Extensions.Configuration.Consul/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Bnet.Extensions.Configuration.Consul.svg)](https://www.nuget.org/packages/Bnet.Extensions.Configuration.Consul/)
+[![CI](https://github.com/benetv3/Bnet.Extensions.Configuration.Consul/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/benetv3/Bnet.Extensions.Configuration.Consul/actions/workflows/ci.yml)
 
 ## Differences from the upstream library
 
